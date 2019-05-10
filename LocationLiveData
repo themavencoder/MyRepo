@@ -1,0 +1,107 @@
+package com.zendflux.ui.common;
+
+import android.Manifest;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.location.Location;
+
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.zendflux.App;
+import com.zendflux.models.pojo.UserLocation;
+import com.zendflux.utils.DebugUtils;
+
+import java.util.concurrent.TimeUnit;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Observer;
+
+public class LocationLiveData extends MutableLiveData<UserLocation> {
+
+    public LocationLiveData() {
+    }
+
+
+    @Override
+    protected void onActive() {
+        super.onActive();
+        getLastLocation();
+    }
+
+    @Override
+    public void observe(@NonNull LifecycleOwner owner, @NonNull Observer<? super UserLocation> observer) {
+        super.observe(owner, observer);
+        getLastLocation();
+    }
+
+    public void getLastLocation() {
+        Context context = App.getContext();
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.getFusedLocationProviderClient(context)
+                    .getLastLocation().addOnCompleteListener(task -> {
+                Location location = task.getResult();
+                if (location == null)return;
+                UserLocation userLocation = new UserLocation(location);
+                setValue(userLocation);
+            });
+        }
+    }
+
+    public void beginLocationUpdate() {
+        Context context = App.getContext();
+        LocationRequest locationRequest = new LocationRequest();
+        locationRequest.setFastestInterval(TimeUnit.SECONDS.toMillis(10));
+        locationRequest.setInterval(TimeUnit.SECONDS.toMillis(15));
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.getFusedLocationProviderClient(context).requestLocationUpdates(locationRequest,
+                    locationCallback, null);
+        }
+    }
+
+    public void beginFastLocationUpdate() {
+        Context context = App.getContext();
+        LocationRequest locationRequest = new LocationRequest();
+        locationRequest.setFastestInterval(0L);
+        locationRequest.setInterval(0L);
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.getFusedLocationProviderClient(context).requestLocationUpdates(locationRequest,
+                    locationCallback, null);
+        }else {
+            DebugUtils.debug(LocationLiveData.class, "Permission not granted");
+        }
+    }
+
+    private LocationCallback locationCallback = new LocationCallback() {
+        @Override
+        public void onLocationResult(LocationResult locationResult) {
+            Context context = App.getContext();
+            if (locationResult.getLocations().isEmpty()) return;
+            Location location = locationResult.getLocations().get(0);
+//            DebugUtil.debug(CabAgeService.class, "Location changed: "+location.getLatitude());
+            UserLocation userLocation = new UserLocation(location);
+            setValue(userLocation);
+        }
+    };
+
+
+    public  void stopLocationUpdates() {
+        Context context = App.getContext();
+        LocationServices.getFusedLocationProviderClient(context).removeLocationUpdates(locationCallback);
+    }
+
+    @Override
+    protected void onInactive() {
+        super.onInactive();
+        stopLocationUpdates();
+    }
+}
